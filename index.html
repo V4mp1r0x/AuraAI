@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0a090f;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+        #chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        #chat-container::-webkit-scrollbar-track {
+            background: #1e1b33;
+        }
+        #chat-container::-webkit-scrollbar-thumb {
+            background-color: #4a417a;
+            border-radius: 20px;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        .loader-dot {
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .loader-dot:nth-child(1) { animation-delay: -0.32s; }
+        .loader-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+        .glow-border {
+            box-shadow: 0 0 2px 0px rgba(192, 132, 252, 0.5), 0 0 8px 0px rgba(124, 58, 237, 0.4);
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen bg-gradient-to-br from-[#0a090f] via-[#100e1c] to-[#0a090f]">
+
+    <!-- Header -->
+    <header class="p-4 border-b border-gray-800/50 text-center shadow-lg bg-black/20 backdrop-blur-sm">
+        <h1 class="text-2xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-indigo-500">
+            Aura AI
+        </h1>
+    </header>
+
+    <!-- Chat Container -->
+    <main id="chat-container" class="flex-1 p-4 md:p-6 overflow-y-auto space-y-6">
+        <!-- Mensagem inicial da IA -->
+        <div class="message flex items-start gap-3 justify-start">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+            </div>
+            <div class="max-w-md md:max-w-lg p-3.5 rounded-2xl rounded-tl-none bg-gray-800/70 shadow-md">
+                <p class="text-gray-200">Olá! Como posso te ajudar hoje? Para gerar uma imagem, comece sua mensagem com <strong>/imagine</strong> ou <strong>/desenhe</strong>.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Input Form -->
+    <footer class="p-4 border-t border-gray-800/50 bg-black/20 backdrop-blur-sm">
+        <form id="chat-form" class="max-w-4xl mx-auto flex items-center gap-3">
+            <input type="text" id="prompt-input" placeholder="Pergunte ou use /imagine para criar..." class="flex-1 w-full px-5 py-3 bg-gray-800/60 border border-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300 text-white placeholder-gray-500 glow-border" autocomplete="off">
+            <button type="submit" class="w-12 h-12 flex-shrink-0 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 text-white flex items-center justify-center hover:opacity-90 transition-opacity duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send-horizontal"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg>
+            </button>
+        </form>
+        <p class="text-center text-xs text-gray-600 mt-3">Criado por Guilherme Paz</p>
+    </footer>
+
+    <script>
+        const chatForm = document.getElementById('chat-form');
+        const promptInput = document.getElementById('prompt-input');
+        const chatContainer = document.getElementById('chat-container');
+        const submitButton = chatForm.querySelector('button');
+
+        const API_KEY = "AIzaSyBe3v_mQ3fm3by1QFwIbakdKOHWbHSX9Rg"; // A chave da API foi inserida
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${API_KEY}`;
+        const IMAGEN_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${API_KEY}`;
+
+        // Função para adicionar mensagem ao chat
+        const addMessage = (sender, content, type = 'text') => {
+            const isUser = sender === 'user';
+            
+            const messageWrapper = document.createElement('div');
+            messageWrapper.className = `message flex items-start gap-3 ${isUser ? 'justify-end' : 'justify-start'}`;
+
+            let messageContent = '';
+            
+            if (isUser) {
+                messageContent = `
+                    <div class="max-w-md md:max-w-lg p-3.5 rounded-2xl rounded-tr-none bg-blue-600 text-white shadow-md">
+                        <p>${content}</p>
+                    </div>
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-300"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </div>
+                `;
+            } else {
+                 const aiIcon = `
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                    </div>`;
+
+                if (type === 'image') {
+                    messageContent = `${aiIcon}
+                        <div class="message-text max-w-sm md:max-w-md p-2 rounded-2xl rounded-tl-none bg-gray-800/70 shadow-md">
+                            <img src="${content}" alt="Imagem gerada por IA" class="rounded-xl w-full h-auto" />
+                        </div>`;
+                } else {
+                    messageContent = `${aiIcon}
+                        <div class="message-text max-w-md md:max-w-lg p-3.5 rounded-2xl rounded-tl-none bg-gray-800/70 shadow-md">
+                            <p class="text-gray-200">${content}</p>
+                        </div>`;
+                }
+            }
+            
+            messageWrapper.innerHTML = messageContent;
+            chatContainer.appendChild(messageWrapper);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        };
+
+        // Função para mostrar o indicador de "digitando"
+        const showLoadingIndicator = () => {
+            const loaderWrapper = document.createElement('div');
+            loaderWrapper.id = 'loader';
+            loaderWrapper.className = 'message flex items-start gap-3 justify-start';
+            loaderWrapper.innerHTML = `
+                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                </div>
+                <div class="max-w-md md:max-w-lg p-3.5 rounded-2xl rounded-tl-none bg-gray-800/70 shadow-md flex items-center space-x-1.5">
+                    <div class="loader-dot w-2.5 h-2.5 bg-purple-400 rounded-full"></div>
+                    <div class="loader-dot w-2.5 h-2.5 bg-purple-400 rounded-full"></div>
+                    <div class="loader-dot w-2.5 h-2.5 bg-purple-400 rounded-full"></div>
+                </div>
+            `;
+            chatContainer.appendChild(loaderWrapper);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        };
+
+        // Função para remover o indicador
+        const hideLoadingIndicator = () => {
+            const loader = document.getElementById('loader');
+            if (loader) {
+                loader.remove();
+            }
+        };
+
+        const callGeminiAPI = async (prompt) => {
+            // ... (função mantida como no original)
+            let retries = 3;
+            let delay = 1000;
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const payload = { contents: [{ parts: [{ text: prompt }] }] };
+                    const response = await fetch(GEMINI_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+                    if (candidate && candidate.content?.parts?.[0]?.text) {
+                        return candidate.content.parts[0].text;
+                    } else {
+                        throw new Error("Resposta da API inválida ou vazia.");
+                    }
+                } catch (error) {
+                    console.error(`Tentativa ${i + 1} falhou:`, error);
+                    if (i < retries - 1) {
+                        await new Promise(res => setTimeout(res, delay));
+                        delay *= 2;
+                    } else {
+                        return "Desculpe, não consegui processar sua solicitação no momento. Tente novamente mais tarde.";
+                    }
+                }
+            }
+        };
+        
+        const callImagenAPI = async (prompt) => {
+            let retries = 3;
+            let delay = 1000;
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const payload = { instances: [{ prompt }], parameters: { "sampleCount": 1 } };
+                    const response = await fetch(IMAGEN_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    const result = await response.json();
+                    const prediction = result.predictions?.[0];
+                    if (prediction && prediction.bytesBase64Encoded) {
+                        return `data:image/png;base64,${prediction.bytesBase64Encoded}`;
+                    } else {
+                        throw new Error("Resposta da API de imagem inválida ou vazia.");
+                    }
+                } catch (error) {
+                    console.error(`Tentativa de gerar imagem ${i + 1} falhou:`, error);
+                    if (i < retries - 1) {
+                        await new Promise(res => setTimeout(res, delay));
+                        delay *= 2;
+                    } else {
+                        return null;
+                    }
+                }
+            }
+            return null;
+        };
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fullPrompt = promptInput.value.trim();
+
+            if (!fullPrompt) return;
+
+            addMessage('user', fullPrompt);
+            promptInput.value = '';
+            submitButton.disabled = true;
+
+            showLoadingIndicator();
+
+            const isImagePrompt = fullPrompt.toLowerCase().startsWith('/imagine ') || fullPrompt.toLowerCase().startsWith('/desenhe ');
+
+            if (isImagePrompt) {
+                const imagePrompt = fullPrompt.substring(fullPrompt.indexOf(' ') + 1);
+                const imageUrl = await callImagenAPI(imagePrompt);
+                hideLoadingIndicator();
+                if (imageUrl) {
+                    addMessage('ai', imageUrl, 'image');
+                } else {
+                    addMessage('ai', "Desculpe, não consegui gerar a imagem. Por favor, tente novamente.", 'text');
+                }
+            } else {
+                const aiResponse = await callGeminiAPI(fullPrompt);
+                hideLoadingIndicator();
+                addMessage('ai', aiResponse.replace(/\n/g, '<br>'), 'text');
+            }
+            
+            submitButton.disabled = false;
+            promptInput.focus();
+        });
+    </script>
+</body>
+</html>
+
